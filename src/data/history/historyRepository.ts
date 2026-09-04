@@ -3,6 +3,7 @@ import type { BatteryReading } from '../models/battery';
 import type { AnalyticsSample } from '../../features/analytics/estimate';
 import { bucketSizeMs } from './buckets';
 import { querySessions, type Session } from './sessions';
+import type { ExportRow } from '../../features/export/csv';
 import {
   DATABASE_NAME,
   MIGRATIONS,
@@ -186,6 +187,39 @@ export function queryAnalyticsSamples(
         : Number(row.charge_counter_uah) / 1000,
     powerW: nullableNumber(row.power_w),
     isCharging: Number(row.is_charging) === 1,
+  }));
+}
+
+type ExportQueryRow = {
+  timestamp: number;
+  level_percent: number | null;
+  voltage_mv: number | null;
+  current_ua: number | null;
+  power_w: number | null;
+  temperature_c: number | null;
+  charge_status: string;
+};
+
+/** Every stored column, in chronological order, for CSV export (§32). */
+export function queryForExport(from: number, to: number): ExportRow[] {
+  const result = db().execute<ExportQueryRow>(
+    `SELECT timestamp, level_percent, voltage_mv, current_ua, power_w,
+            temperature_c, charge_status
+     FROM samples
+     WHERE timestamp >= ? AND timestamp <= ?
+     ORDER BY timestamp ASC`,
+    [from, to],
+  );
+
+  return result.rows._array.map(row => ({
+    timestamp: Number(row.timestamp),
+    levelPercent: nullableNumber(row.level_percent),
+    voltageMv: nullableNumber(row.voltage_mv),
+    currentMa:
+      row.current_ua === null ? null : Number(row.current_ua) / 1000,
+    powerW: nullableNumber(row.power_w),
+    temperatureC: nullableNumber(row.temperature_c),
+    status: String(row.charge_status),
   }));
 }
 
