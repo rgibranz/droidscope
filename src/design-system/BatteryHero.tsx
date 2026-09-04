@@ -4,6 +4,11 @@ import { BATTERY_RING_SIZE, BatteryRing } from './BatteryRing';
 import { typeScale } from '../core/theme/tokens';
 import { formatPercent, formatWatts, UNAVAILABLE } from '../core/utils/units';
 import type { ChargeStatus } from '../data/models/battery';
+import {
+  formatDuration,
+  type Confidence,
+  type Estimate,
+} from '../features/analytics/estimate';
 
 const STATUS_LABEL: Record<ChargeStatus, string> = {
   charging: 'Charging',
@@ -17,16 +22,24 @@ const STATUS_LABEL: Record<ChargeStatus, string> = {
  * §41.5 requires state to be readable without relying on colour, so the hero
  * always pairs the accent with an icon and a written status.
  */
+const CONFIDENCE_LABEL: Record<Confidence, string> = {
+  high: 'High confidence',
+  medium: 'Medium confidence',
+  low: 'Low confidence',
+};
+
 export function BatteryHero({
   levelPercent,
   powerW,
   status,
   isCharging,
+  estimate,
 }: {
   levelPercent: number | null;
   powerW: number | null;
   status: ChargeStatus;
   isCharging: boolean;
+  estimate: Estimate;
 }) {
   const theme = useTheme();
   const accent = isCharging
@@ -94,6 +107,45 @@ export function BatteryHero({
         fontVariant={['tabular-nums']}
       >
         {powerLabel}
+      </Text>
+
+      <EstimateLine estimate={estimate} isCharging={isCharging} />
+    </YStack>
+  );
+}
+
+/**
+ * §2.2 and §31: an estimate is labelled as one, and carries its confidence.
+ * When there is not enough history it says what it is waiting for rather than
+ * showing a placeholder number.
+ */
+function EstimateLine({
+  estimate,
+  isCharging,
+}: {
+  estimate: Estimate;
+  isCharging: boolean;
+}) {
+  if (estimate.kind === 'unavailable') {
+    return (
+      <Text fontSize={typeScale.label} color="$textMuted" textAlign="center">
+        {estimate.reason}
+      </Text>
+    );
+  }
+
+  return (
+    <YStack alignItems="center" gap="$1">
+      <Text
+        fontSize={typeScale.sectionTitle}
+        color="$color"
+        fontVariant={['tabular-nums']}
+      >
+        {formatDuration(estimate.hours)}
+      </Text>
+      <Text fontSize={typeScale.label} color="$textMuted" textAlign="center">
+        {isCharging ? 'estimated until full' : 'estimated remaining'} ·{' '}
+        {CONFIDENCE_LABEL[estimate.confidence].toLowerCase()}
       </Text>
     </YStack>
   );

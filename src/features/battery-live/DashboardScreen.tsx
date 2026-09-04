@@ -22,6 +22,7 @@ import {
   type PlugType,
 } from '../../data/models/battery';
 import { useBatteryStore } from './store';
+import { useEstimate } from '../analytics/useEstimate';
 
 const PLUG_LABEL: Record<PlugType, string> = {
   ac: 'AC',
@@ -50,6 +51,9 @@ export function DashboardScreen() {
   const error = useBatteryStore(s => s.error);
   const start = useBatteryStore(s => s.start);
   const stop = useBatteryStore(s => s.stop);
+
+  // Called before the early returns below: hooks cannot be conditional.
+  const estimate = useEstimate(reading?.isCharging ?? false);
 
   useEffect(() => {
     start();
@@ -105,6 +109,7 @@ export function DashboardScreen() {
         powerW={reading.powerW}
         status={reading.status}
         isCharging={reading.isCharging}
+        estimate={estimate}
       />
 
       {calibration.convention === 'unknown' && capabilities?.currentNow ? (

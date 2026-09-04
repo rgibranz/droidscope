@@ -1,10 +1,11 @@
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Activity, LineChart, Stethoscope } from 'lucide-react-native';
+import { Activity, History as HistoryIconSrc, LineChart, Stethoscope } from 'lucide-react-native';
 import { useTheme } from '../design-system/tamagui';
 import { DashboardScreen } from '../features/battery-live/DashboardScreen';
 import { DiagnosticsScreen } from '../features/diagnostics/DiagnosticsScreen';
 import { HistoryScreen } from '../features/history/HistoryScreen';
+import { SessionsScreen } from '../features/sessions/SessionsScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -18,13 +19,16 @@ const OverviewIcon = ({ color, size }: TabIconProps) => (
 const HistoryIcon = ({ color, size }: TabIconProps) => (
   <LineChart color={color} size={size} />
 );
+const SessionsIcon = ({ color, size }: TabIconProps) => (
+  <HistoryIconSrc color={color} size={size} />
+);
 const DiagnosticsIcon = ({ color, size }: TabIconProps) => (
   <Stethoscope color={color} size={size} />
 );
 
 /**
- * §42.1's four tabs land as history and sessions arrive; the first deliverable
- * ships the two destinations that exist.
+ * §42.1's four primary destinations. Diagnostics sits alongside them for now
+ * rather than under Settings, because Settings does not exist yet.
  */
 export function Navigation({ dark }: { dark: boolean }) {
   const theme = useTheme();
@@ -67,6 +71,13 @@ export function Navigation({ dark }: { dark: boolean }) {
           component={HistoryScreen}
           options={{
             tabBarIcon: HistoryIcon,
+          }}
+        />
+        <Tab.Screen
+          name="Sessions"
+          component={SessionsScreen}
+          options={{
+            tabBarIcon: SessionsIcon,
           }}
         />
         <Tab.Screen
