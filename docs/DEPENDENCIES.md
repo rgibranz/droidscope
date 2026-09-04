@@ -25,7 +25,11 @@ MediaTek MT6768, arm64-v8a only.
 | react-native-safe-area-context | 5.5.2 | Edge-to-edge insets (§41.7). |
 | zustand | 5.0.15 | Live telemetry store. |
 | react-native-mmkv | 4.3.2 | Small preferences only (§4.0.6). |
-| react-native-nitro-modules | 0.37.1 | MMKV 4 peer. |
+| react-native-nitro-modules | 0.37.1 | MMKV 4 and NitroSQLite peer. |
+| react-native-nitro-sqlite | 9.7.0 | Battery sample history (§4.0.6). |
+| @shopify/react-native-skia | 2.11.2 | Chart rendering backend. |
+| victory-native | 42.0.1 | Time-series charts (§4.0.5). |
+| react-native-gesture-handler | 2.32.0 | Chart scrubbing (see deviation 7). |
 
 ## Deviations from the PRD's suggested stack
 
@@ -46,16 +50,43 @@ The v5 preset defaults to web-style prop names (`background`, not
 `backgroundColor`) and shorthand-only styling. Overriding this keeps React
 Native's vocabulary, so the components stay readable to any RN engineer (§4.0.2).
 
-**4. Skia, victory-native, FlashList and NitroSQLite are not installed yet.**
-§71's first deliverable has no chart, no long list and no history, so these four
-native-heavy packages would have no work to do. They arrive with the History
-spec. This keeps the install at 12 packages instead of ~25 and makes each Gradle
-sync substantially faster.
+**4. FlashList is still not installed.**
+Nothing renders a long list yet -- the Sessions screen is a later phase. Skia,
+victory-native and NitroSQLite were held back from the first deliverable for the
+same reason and arrived with History, once there was a chart and a database to
+justify them.
 
 **5. `@tamagui/config` is version 2.7.7, not "v5".**
 The PRD's "@tamagui/config v5" refers to the `v5` *preset subpath*
 (`@tamagui/config/v5`), which this version provides. The package itself is on
 2.x, tracking `tamagui` 2.x.
+
+**6. Tamagui is imported through `src/design-system/tamagui.ts`, never the
+`tamagui` barrel.** The barrel exports menu/popover/dialog, and
+`@tamagui/popper` among them imports `react-dom`, which cannot resolve in a
+React Native bundle (Metro fails outright). Importing `@tamagui/core`,
+`@tamagui/stacks` and `@tamagui/scroll-view` directly avoids it and keeps the
+bundle to what the app renders. Tamagui's `Button` came from the barrel too and
+is replaced by an eight-line `ActionButton`.
+
+**7. `react-native-gesture-handler` is 2.32.0, not 3.x.** GH 3 ships its C++
+shadow nodes at a very deep path:
+
+```
+node_modules/react-native-gesture-handler/shared/shadowNodes/react/renderer/
+  components/rngesturehandler_codegen/RNGestureHandlerDetectorShadowNode.cpp
+```
+
+The resulting object filename is roughly 300 characters, and ninja rejects any
+path over 260 with `Filename longer than 260 characters` — it applies that limit
+to the string itself, so Windows' `LongPathsEnabled=1` (already on here) does not
+help, and neither does shortening the build directory. GH 2.32.0's deepest C++
+path is 78 characters and builds cleanly. `victory-native` declares
+`react-native-gesture-handler >=2.0.0`, so 2.x is supported, not a workaround
+around its requirements.
+
+Revisit if the project moves to a much shorter path, or once GH flattens that
+tree.
 
 ## Native API notes
 
@@ -65,15 +96,8 @@ any API level. Android 14 (API 34) exposes cycle count as the broadcast extra
 back to sysfs `cycle_count` for older vendors.
 
 **MMKV 4 replaced `new MMKV()` with `createMMKV()`**, and `delete(key)` with
-`remove(key)`.
-
-**6. Tamagui is imported through `src/design-system/tamagui.ts`, never the
-`tamagui` barrel.** The barrel exports menu/popover/dialog, and
-`@tamagui/popper` among them imports `react-dom`, which cannot resolve in a
-React Native bundle (Metro fails outright). Importing `@tamagui/core`,
-`@tamagui/stacks` and `@tamagui/scroll-view` directly avoids it and keeps the
-bundle to what the app renders. Tamagui's `Button` came from the barrel too and
-is replaced by an eight-line `ActionButton`.
+`remove(key)`. NitroSQLite opens with `open({ name })` and returns a synchronous
+`execute`.
 
 ## Metro resolver
 
