@@ -1,6 +1,8 @@
 import { open, type NitroSQLiteConnection } from 'react-native-nitro-sqlite';
 import type { BatteryReading } from '../models/battery';
+import type { AnalyticsSample } from '../../features/analytics/estimate';
 import { bucketSizeMs } from './buckets';
+import { querySessions, type Session } from './sessions';
 import {
   DATABASE_NAME,
   MIGRATIONS,
@@ -148,6 +150,47 @@ export function purgeOlderThan(cutoff: number): number {
     cutoff,
   ]);
   return result.rowsAffected ?? 0;
+}
+
+type AnalyticsRow = {
+  timestamp: number;
+  level_percent: number | null;
+  charge_counter_uah: number | null;
+  power_w: number | null;
+  is_charging: number;
+};
+
+/**
+ * Raw (un-bucketed) samples for the analytics layer. §24 works on a 10-30
+ * minute window, which is a few hundred rows -- small enough to hand to JS,
+ * unlike a chart range.
+ */
+export function queryAnalyticsSamples(
+  from: number,
+  to: number,
+): AnalyticsSample[] {
+  const result = db().execute<AnalyticsRow>(
+    `SELECT timestamp, level_percent, charge_counter_uah, power_w, is_charging
+     FROM samples
+     WHERE timestamp >= ? AND timestamp <= ? AND level_percent IS NOT NULL
+     ORDER BY timestamp ASC`,
+    [from, to],
+  );
+
+  return result.rows._array.map(row => ({
+    timestamp: Number(row.timestamp),
+    levelPercent: Number(row.level_percent),
+    chargeCounterMah:
+      row.charge_counter_uah === null
+        ? null
+        : Number(row.charge_counter_uah) / 1000,
+    powerW: nullableNumber(row.power_w),
+    isCharging: Number(row.is_charging) === 1,
+  }));
+}
+
+export function getSessions(since: number, limit = 100): Session[] {
+  return querySessions(db(), since, limit);
 }
 
 export function countSamples(): number {
