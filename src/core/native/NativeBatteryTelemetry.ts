@@ -61,6 +61,15 @@ export interface Spec extends TurboModule {
   getDiagnostics(): Promise<NativeDiagnostics>;
   startMonitoring(intervalMs: number): Promise<void>;
   stopMonitoring(): Promise<void>;
+
+  /**
+   * §20: a foreground service owns the schedule while the app is not in front,
+   * and shows the persistent notification Android requires for it.
+   */
+  startBackgroundMonitoring(intervalMs: number): Promise<void>;
+  stopBackgroundMonitoring(): Promise<void>;
+  isBackgroundMonitoringActive(): Promise<boolean>;
+
   readonly onTelemetry: CodegenTypes.EventEmitter<NativeSnapshot>;
 }
 

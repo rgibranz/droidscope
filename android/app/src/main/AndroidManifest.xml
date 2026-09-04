@@ -1,6 +1,14 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Metro's dev server only; the app itself needs no network (§34, §65). -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- §20: background sampling requires a foreground service on modern Android. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- §33: needed from Android 13 to show the service's own notification. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
       android:name=".MainApplication"
@@ -23,5 +31,32 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
       </activity>
+
+      <!--
+        No foregroundServiceType fits "watch the battery": dataSync, location and
+        the rest all describe something else. specialUse is the honest choice,
+        with the reason stated rather than a type borrowed to pass review.
+      -->
+      <service
+        android:name=".telemetry.BatteryMonitorService"
+        android:exported="false"
+        android:foregroundServiceType="specialUse">
+        <property
+          android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="Periodic battery telemetry sampling requested by the user" />
+      </service>
+
+      <!-- §33: CSV export shares a cache file by content URI, no storage permission. -->
+      <provider
+        android:name="androidx.core.content.FileProvider"
+        android:authorities="${applicationId}.fileprovider"
+        android:exported="false"
+        android:grantUriPermissions="true"
+        tools:replace="android:authorities">
+        <meta-data
+          android:name="android.support.FILE_PROVIDER_PATHS"
+          android:resource="@xml/file_paths"
+          tools:replace="android:resource" />
+      </provider>
     </application>
 </manifest>

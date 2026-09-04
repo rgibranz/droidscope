@@ -76,6 +76,9 @@ export default {
   getDiagnostics: jest.fn(async () => emptyDiagnostics),
   startMonitoring: jest.fn(async () => {}),
   stopMonitoring: jest.fn(async () => {}),
+  startBackgroundMonitoring: jest.fn(async () => {}),
+  stopBackgroundMonitoring: jest.fn(async () => {}),
+  isBackgroundMonitoringActive: jest.fn(async () => false),
   onTelemetry: jest.fn((handler: (s: NativeSnapshot) => void) => {
     listener = handler;
     return {

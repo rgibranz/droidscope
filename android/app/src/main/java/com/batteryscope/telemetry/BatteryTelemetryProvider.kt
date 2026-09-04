@@ -148,6 +148,36 @@ class BatteryTelemetryProvider(private val context: Context) {
     return sysfsLong("cycle_count")?.toInt()
   }
 
+  /**
+   * One line for the foreground-service notification (§20), e.g.
+   * "82% - -2.80 W - 34.8C". Metrics the device does not report are simply left
+   * out rather than shown as zero.
+   */
+  fun summaryLine(): String {
+    val intent = batteryIntent()
+    val parts = mutableListOf<String>()
+
+    val level = intExtra(intent, BatteryManager.EXTRA_LEVEL)
+    val scale = intExtra(intent, BatteryManager.EXTRA_SCALE)
+    if (level != null && scale != null && scale > 0) {
+      parts.add("${level * 100 / scale}%")
+    }
+
+    val voltageMv = intExtra(intent, BatteryManager.EXTRA_VOLTAGE)
+    val currentUa = intProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+    if (voltageMv != null && currentUa != null) {
+      val watts = (voltageMv / 1000.0) * (currentUa / 1_000_000.0)
+      parts.add(String.format("%.2f W", watts))
+    }
+
+    val tempDeci = intExtra(intent, BatteryManager.EXTRA_TEMPERATURE)
+    if (tempDeci != null) {
+      parts.add(String.format("%.1f°C", tempDeci / 10.0))
+    }
+
+    return if (parts.isEmpty()) "Reading battery sensors…" else parts.joinToString(" • ")
+  }
+
   // --------------------------------------------------------- capabilities
 
   fun capabilities(): WritableMap {

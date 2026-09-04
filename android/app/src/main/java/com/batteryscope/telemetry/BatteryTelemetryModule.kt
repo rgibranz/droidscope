@@ -17,6 +17,10 @@ class BatteryTelemetryModule(reactContext: ReactApplicationContext) :
   private val provider = BatteryTelemetryProvider(reactContext)
   private val handler = Handler(Looper.getMainLooper())
 
+  init {
+    instance = this
+  }
+
   private var intervalMs: Long = DEFAULT_INTERVAL_MS
   private var monitoring = false
 
@@ -98,6 +102,31 @@ class BatteryTelemetryModule(reactContext: ReactApplicationContext) :
     promise.resolve(null)
   }
 
+  override fun startBackgroundMonitoring(intervalMs: Double, promise: Promise) {
+    try {
+      BatteryMonitorService.start(
+        reactApplicationContext,
+        intervalMs.toLong().coerceAtLeast(MIN_BACKGROUND_INTERVAL_MS),
+      )
+      promise.resolve(null)
+    } catch (t: Throwable) {
+      promise.reject(ERR_MONITORING, t.message, t)
+    }
+  }
+
+  override fun stopBackgroundMonitoring(promise: Promise) {
+    try {
+      BatteryMonitorService.stop(reactApplicationContext)
+      promise.resolve(null)
+    } catch (t: Throwable) {
+      promise.reject(ERR_MONITORING, t.message, t)
+    }
+  }
+
+  override fun isBackgroundMonitoringActive(promise: Promise) {
+    promise.resolve(BatteryMonitorService.running)
+  }
+
   private fun stopInternal() {
     handler.removeCallbacks(ticker)
     if (monitoring) {
@@ -112,6 +141,7 @@ class BatteryTelemetryModule(reactContext: ReactApplicationContext) :
 
   override fun invalidate() {
     stopInternal()
+    if (instance === this) instance = null
     super.invalidate()
   }
 
@@ -119,6 +149,23 @@ class BatteryTelemetryModule(reactContext: ReactApplicationContext) :
     const val NAME = "BatteryTelemetry"
     private const val DEFAULT_INTERVAL_MS = 10_000L
     private const val MIN_INTERVAL_MS = 1_000L
+    /** §19: background sampling should not be more frequent than necessary. */
+    private const val MIN_BACKGROUND_INTERVAL_MS = 30_000L
+
+    @Volatile private var instance: BatteryTelemetryModule? = null
+
+    /**
+     * The foreground service pushes its samples through the same event the app
+     * already listens to, so persistence stays in one place. If JS is gone the
+     * emit is simply dropped -- the notification still shows live values.
+     */
+    fun emitFromService(snapshot: com.facebook.react.bridge.WritableMap) {
+      try {
+        instance?.emitOnTelemetry(snapshot)
+      } catch (t: Throwable) {
+        // Never let a missing JS runtime crash the service.
+      }
+    }
     private const val ERR_SNAPSHOT = "E_SNAPSHOT"
     private const val ERR_CAPABILITIES = "E_CAPABILITIES"
     private const val ERR_DIAGNOSTICS = "E_DIAGNOSTICS"
