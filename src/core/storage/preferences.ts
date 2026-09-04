@@ -20,6 +20,33 @@ export function writeThemePreference(value: ThemePreference): void {
   storage.set(THEME_KEY, value);
 }
 
+/** §7.6 sampling intervals. */
+export const SAMPLE_INTERVALS = [5_000, 10_000, 30_000, 60_000] as const;
+export type SampleInterval = (typeof SAMPLE_INTERVALS)[number];
+
+const INTERVAL_KEY = 'sampleInterval';
+const BACKGROUND_KEY = 'backgroundEnabled';
+
+export function readSampleInterval(): SampleInterval {
+  const value = storage.getNumber(INTERVAL_KEY);
+  return SAMPLE_INTERVALS.includes(value as SampleInterval)
+    ? (value as SampleInterval)
+    : 10_000; // §19 foreground default
+}
+
+export function writeSampleInterval(value: SampleInterval): void {
+  storage.set(INTERVAL_KEY, value);
+}
+
+/** §20: monitoring state is restored after an app restart. */
+export function readBackgroundEnabled(): boolean {
+  return storage.getBoolean(BACKGROUND_KEY) ?? false;
+}
+
+export function writeBackgroundEnabled(value: boolean): void {
+  storage.set(BACKGROUND_KEY, value);
+}
+
 /** §22 retention options. `unlimited` never purges. */
 export type RetentionOption = '24h' | '3d' | '7d' | '30d' | 'unlimited';
 
