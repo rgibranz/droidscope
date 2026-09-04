@@ -1,45 +1,24 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import { useColorScheme, StatusBar } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { TamaguiProvider, Theme } from './src/design-system/tamagui';
+import config from './src/core/theme/tamagui.config';
+import { Navigation } from './src/app/navigation';
 
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
-
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+export default function App() {
+  // Settings ships with the next deliverable; until then the system preference
+  // is the source of truth. Dark is designed first, not derived from light.
+  const dark = useColorScheme() !== 'light';
 
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
-    </SafeAreaProvider>
+    <TamaguiProvider config={config} defaultTheme={dark ? 'dark' : 'light'}>
+      <Theme name={dark ? 'dark' : 'light'}>
+        <SafeAreaProvider>
+          {/* Edge-to-edge is enabled in gradle.properties, so the status bar
+              background is owned by the system rather than set here. */}
+          <StatusBar barStyle={dark ? 'light-content' : 'dark-content'} />
+          <Navigation dark={dark} />
+        </SafeAreaProvider>
+      </Theme>
+    </TamaguiProvider>
   );
 }
-
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
-
-  return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
-      />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});
-
-export default App;
