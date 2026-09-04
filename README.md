@@ -1,97 +1,189 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# BatteryScope
 
-# Getting Started
+Android battery telemetry app. React Native 0.87 + TypeScript, with a Kotlin
+TurboModule for the actual battery reads.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+Local-first: no account, no backend, no network. Battery data never leaves the
+device unless you export it yourself.
 
-## Step 1: Start Metro
+**Guiding rule:** a trustworthy "Unavailable" beats a beautiful fake number. If
+a device does not report a metric, the app says so instead of showing a zero.
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+---
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+## Requirements
 
-```sh
-# Using npm
+```
+Node.js 22.11+
+JDK 17
+Android Studio + Android SDK (platform 35+, CMake, NDK)
+An Android 10+ device (arm64) with USB debugging
+```
+
+## First run
+
+```bash
+npm install
+```
+
+## Development
+
+Two terminals, or run Metro in the background.
+
+```bash
+# 1. Start the bundler
 npm start
 
-# OR using Yarn
-yarn start
-```
-
-## Step 2: Build and run your app
-
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
-# Using npm
+# 2. Build and install the debug app
 npm run android
-
-# OR using Yarn
-yarn android
 ```
 
-### iOS
+Debug builds load JS from Metro, so Metro must be running. If the device cannot
+reach it:
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+```bash
+adb reverse tcp:8081 tcp:8081
 ```
 
-Then, and every time you update your native dependencies, run:
+### Gradle directly
 
-```sh
-bundle exec pod install
+`npm run android` wraps Gradle. To call it yourself (useful when you only want
+to rebuild native code):
+
+```bash
+# Build and install debug
+./android/gradlew.bat -p android installDebug
+
+# Build only, no install
+./android/gradlew.bat -p android assembleDebug
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+On macOS/Linux drop the `.bat`.
 
-```sh
-# Using npm
-npm run ios
+## Production build
 
-# OR using Yarn
-yarn ios
+Release builds bundle the JavaScript **into** the APK, so Metro is not needed —
+the APK stands alone.
+
+```bash
+# APK, for installing directly on a phone
+./android/gradlew.bat -p android assembleRelease
+# -> android/app/build/outputs/apk/release/app-release.apk
+
+# AAB, only if you are uploading to Play Store
+./android/gradlew.bat -p android bundleRelease
+# -> android/app/build/outputs/bundle/release/app-release.aab
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+Install it:
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+```bash
+adb install -r android/app/build/outputs/apk/release/app-release.apk
+```
 
-## Step 3: Modify your app
+### Three things to know before shipping one
 
-Now that you have successfully run the app, let's make changes!
+**1. Signing still uses the debug keystore.** This is the React Native template
+default and it works — the APK installs fine. But it cannot go to Play Store,
+and if you later switch to your own keystore you must uninstall first, because
+the signature differs. That wipes stored history.
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+To use a real keystore:
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+```bash
+keytool -genkeypair -v -storetype PKCS12 \
+  -keystore batteryscope-release.keystore \
+  -alias batteryscope -keyalg RSA -keysize 2048 -validity 10000
+```
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+Put the credentials in `~/.gradle/gradle.properties` (never in the repo) and add
+a `signingConfigs.release` block in `android/app/build.gradle`.
 
-## Congratulations! :tada:
+**2. Architectures are narrowed to arm64-v8a.** `android/gradle.properties` has:
 
-You've successfully run and modified your React Native App. :partying_face:
+```properties
+reactNativeArchitectures=arm64-v8a
+```
 
-### Now what?
+This cuts build time from ~16 minutes to ~3, and matches the verification device
+(INFINIX X6728 reports only arm64-v8a). The APK will **not** run on a 32-bit
+phone or an x86 emulator. Before distributing, restore:
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+```properties
+reactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64
+```
 
-# Troubleshooting
+**3. ProGuard is off** (`enableProguardInReleaseBuilds = false`). That is the RN
+default and it is safe. Enabling it shrinks the APK but needs keep rules for
+TurboModules and Nitro; do not turn it on unless APK size becomes a problem.
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+### When a native build misbehaves
 
-# Learn More
+CMake caches under `.cxx` go stale and produce errors that look unrelated to
+your change — most memorably `ninja: error: manifest 'build.ninja' still dirty
+after 100 tries`. Clear them:
 
-To learn more about React Native, take a look at the following resources:
+```bash
+# PowerShell
+Remove-Item -Recurse -Force .\android\app\.cxx
+Remove-Item -Recurse -Force .\node_modules\*\android\.cxx
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+# bash
+rm -rf android/app/.cxx node_modules/*/android/.cxx
+```
+
+A full Gradle clean, when that is not enough:
+
+```bash
+./android/gradlew.bat -p android clean
+```
+
+## Checks
+
+```bash
+npm test              # 93 unit tests
+npx tsc --noEmit      # type check
+npx eslint . --ext .ts,.tsx
+```
+
+All three must be clean. Tests cover the calculation logic (§52): unit
+conversion, power, current-sign calibration, range validation, chart bucketing,
+repository mapping, session derivation, time estimates and CSV formatting.
+
+## Project layout
+
+```
+src/
+├── app/                  navigation
+├── core/
+│   ├── native/           TurboModule specs + mocks
+│   ├── battery/          normalisation, sign calibration
+│   ├── storage/          MMKV preferences
+│   ├── theme/            Tamagui config and tokens
+│   └── utils/            unit conversion, validation
+├── data/
+│   ├── models/           domain types
+│   └── history/          SQLite schema, queries, sessions
+├── design-system/        shared components
+└── features/
+    ├── battery-live/     Overview
+    ├── history/          History
+    ├── sessions/         Sessions
+    ├── analytics/        estimates
+    ├── settings/         Settings
+    ├── diagnostics/      Diagnostics
+    └── export/           CSV
+
+android/app/src/main/java/com/batteryscope/telemetry/
+    BatteryTelemetryProvider.kt   reads BatteryManager + broadcasts
+    BatteryTelemetryModule.kt     TurboModule
+    BatteryMonitorService.kt      foreground service (§20)
+    BatteryScopeFilesModule.kt    CSV share
+```
+
+## Docs
+
+- `docs/DEPENDENCIES.md` — chosen versions and every deviation from the PRD,
+  with reasons
+- `docs/superpowers/specs/` — design docs per phase, including the defects each
+  phase found on real hardware
