@@ -1,9 +1,10 @@
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Activity, Stethoscope } from 'lucide-react-native';
+import { Activity, LineChart, Stethoscope } from 'lucide-react-native';
 import { useTheme } from '../design-system/tamagui';
 import { DashboardScreen } from '../features/battery-live/DashboardScreen';
 import { DiagnosticsScreen } from '../features/diagnostics/DiagnosticsScreen';
+import { HistoryScreen } from '../features/history/HistoryScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -13,6 +14,9 @@ type TabIconProps = { color: string; size: number };
 // every render.
 const OverviewIcon = ({ color, size }: TabIconProps) => (
   <Activity color={color} size={size} />
+);
+const HistoryIcon = ({ color, size }: TabIconProps) => (
+  <LineChart color={color} size={size} />
 );
 const DiagnosticsIcon = ({ color, size }: TabIconProps) => (
   <Stethoscope color={color} size={size} />
@@ -56,6 +60,13 @@ export function Navigation({ dark }: { dark: boolean }) {
           component={DashboardScreen}
           options={{
             tabBarIcon: OverviewIcon,
+          }}
+        />
+        <Tab.Screen
+          name="History"
+          component={HistoryScreen}
+          options={{
+            tabBarIcon: HistoryIcon,
           }}
         />
         <Tab.Screen
