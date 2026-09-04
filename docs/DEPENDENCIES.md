@@ -30,6 +30,8 @@ MediaTek MT6768, arm64-v8a only.
 | @shopify/react-native-skia | 2.11.2 | Chart rendering backend. |
 | victory-native | 42.0.1 | Time-series charts (§4.0.5). |
 | react-native-gesture-handler | 2.32.0 | Chart scrubbing (see deviation 7). |
+| @shopify/flash-list | 2.3.2 | Sessions list (§42.4). |
+| @react-navigation/native-stack | 7.18.10 | Settings → Diagnostics drill-down (§42.1). |
 
 ## Deviations from the PRD's suggested stack
 
@@ -50,11 +52,10 @@ The v5 preset defaults to web-style prop names (`background`, not
 `backgroundColor`) and shorthand-only styling. Overriding this keeps React
 Native's vocabulary, so the components stay readable to any RN engineer (§4.0.2).
 
-**4. FlashList is still not installed.**
-Nothing renders a long list yet -- the Sessions screen is a later phase. Skia,
-victory-native and NitroSQLite were held back from the first deliverable for the
-same reason and arrived with History, once there was a chart and a database to
-justify them.
+**4. Every PRD-suggested package is now installed, but each arrived only when
+something needed it.** Skia, victory-native and NitroSQLite landed with History;
+FlashList with the Sessions list. Holding them back kept the first deliverable
+at 12 packages instead of ~25 and made each Gradle sync substantially faster.
 
 **5. `@tamagui/config` is version 2.7.7, not "v5".**
 The PRD's "@tamagui/config v5" refers to the `v5` *preset subpath*
@@ -98,6 +99,16 @@ back to sysfs `cycle_count` for older vendors.
 **MMKV 4 replaced `new MMKV()` with `createMMKV()`**, and `delete(key)` with
 `remove(key)`. NitroSQLite opens with `open({ name })` and returns a synchronous
 `execute`.
+
+**No `foregroundServiceType` describes battery monitoring.** `dataSync`,
+`location`, `mediaPlayback` and the rest all mean something else, so the service
+declares `specialUse` with its reason stated in the manifest rather than
+borrowing a type that would be untrue.
+
+**No new dependency was added for file sharing.** React Native's Share API
+carries text and URLs only; a ~50-line native module writes the CSV to app cache
+and hands Android a `content://` URI through FileProvider, with no storage
+permission (§33).
 
 ## Metro resolver
 
