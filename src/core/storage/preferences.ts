@@ -20,6 +20,30 @@ export function writeThemePreference(value: ThemePreference): void {
   storage.set(THEME_KEY, value);
 }
 
+/** §22 retention options. `unlimited` never purges. */
+export type RetentionOption = '24h' | '3d' | '7d' | '30d' | 'unlimited';
+
+const RETENTION_KEY = 'retention';
+
+export const RETENTION_MS: Record<RetentionOption, number | null> = {
+  '24h': 24 * 60 * 60_000,
+  '3d': 3 * 24 * 60 * 60_000,
+  '7d': 7 * 24 * 60 * 60_000,
+  '30d': 30 * 24 * 60 * 60_000,
+  unlimited: null,
+};
+
+export function readRetention(): RetentionOption {
+  const value = storage.getString(RETENTION_KEY);
+  return value !== undefined && value in RETENTION_MS
+    ? (value as RetentionOption)
+    : '7d'; // §22 default
+}
+
+export function writeRetention(value: RetentionOption): void {
+  storage.set(RETENTION_KEY, value);
+}
+
 /**
  * Sign calibration is per device model: carrying a Samsung's convention over to
  * an Infinix would be worse than starting from unknown.
