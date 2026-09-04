@@ -4,11 +4,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { TamaguiProvider, Theme } from './src/design-system/tamagui';
 import config from './src/core/theme/tamagui.config';
 import { Navigation } from './src/app/navigation';
+import { useSettingsStore } from './src/features/settings/store';
 
 export default function App() {
-  // Settings ships with the next deliverable; until then the system preference
-  // is the source of truth. Dark is designed first, not derived from light.
-  const dark = useColorScheme() !== 'light';
+  const systemDark = useColorScheme() !== 'light';
+  const preference = useSettingsStore(s => s.theme);
+  // "system" follows the OS; an explicit choice overrides it (§41.5). Dark is
+  // designed first, not derived from light.
+  const dark = preference === 'system' ? systemDark : preference === 'dark';
 
   return (
     // Required by react-native-gesture-handler, which backs chart scrubbing.

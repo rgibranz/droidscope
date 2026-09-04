@@ -13,21 +13,24 @@ import {
 import { toChargeStatus, type BatteryReading } from '../../data/models/battery';
 import {
   clearSignConvention,
+  readBackgroundEnabled,
   readRetention,
+  readSampleInterval,
   readSignConvention,
   RETENTION_MS,
   writeSignConvention,
 } from '../../core/storage/preferences';
 import { insertSample, purgeOlderThan } from '../../data/history/historyRepository';
 
-const FOREGROUND_INTERVAL_MS = 10_000;
+/** @see §19 -- background sampling stays coarse to keep the app cheap. */
+const MIN_BACKGROUND_INTERVAL_MS = 30_000;
 
 /**
  * Telemetry also arrives on plug/unplug broadcasts, which can burst. Persisting
  * is throttled to the sampling interval so a flurry of state changes does not
  * inflate the database (§19, §63).
  */
-const MIN_PERSIST_GAP_MS = FOREGROUND_INTERVAL_MS - 500;
+const MIN_PERSIST_GAP_MS = 9_500;
 
 /**
  * A device missing a metric is still `ready` -- availability is a property of
@@ -87,7 +90,8 @@ export const useBatteryStore = create<BatteryStore>((set, get) => ({
       subscription = BatteryTelemetry.onTelemetry(next =>
         applySnapshot(next, set, get),
       );
-      await BatteryTelemetry.startMonitoring(FOREGROUND_INTERVAL_MS);
+      await BatteryTelemetry.startMonitoring(readSampleInterval());
+      await restoreBackgroundMonitoring();
       set({ status: 'ready', error: null });
     } catch (e) {
       set({ status: 'error', error: describeError(e) });
@@ -145,6 +149,22 @@ function applySnapshot(snapshot: NativeSnapshot, set: Setter, get: Getter) {
     reading,
     status: 'ready',
   });
+}
+
+/**
+ * §20: monitoring survives an app restart. The service may already be running
+ * (START_STICKY), so it is only started when it is not.
+ */
+async function restoreBackgroundMonitoring(): Promise<void> {
+  if (!readBackgroundEnabled()) return;
+  try {
+    if (await BatteryTelemetry.isBackgroundMonitoringActive()) return;
+    await BatteryTelemetry.startBackgroundMonitoring(
+      Math.max(readSampleInterval(), MIN_BACKGROUND_INTERVAL_MS),
+    );
+  } catch {
+    // The user can retry from Settings; failing here must not block the app.
+  }
 }
 
 /** §22: purge on startup; sampling keeps the window rolling from there. */

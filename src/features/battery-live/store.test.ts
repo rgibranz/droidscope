@@ -7,12 +7,14 @@ jest.mock('../../data/history/historyRepository', () => ({
 
 // MMKV is a native module; an in-memory map is enough to exercise persistence.
 jest.mock('react-native-mmkv', () => {
-  const map = new Map<string, string>();
+  const map = new Map<string, string | number | boolean>();
   return {
     __map: map,
     createMMKV: () => ({
-      getString: (k: string) => map.get(k),
-      set: (k: string, v: string) => {
+      getString: (k: string) => map.get(k) as string | undefined,
+      getNumber: (k: string) => map.get(k) as number | undefined,
+      getBoolean: (k: string) => map.get(k) as boolean | undefined,
+      set: (k: string, v: string | number | boolean) => {
         map.set(k, v);
       },
       remove: (k: string) => map.delete(k),
@@ -39,7 +41,7 @@ const initialState = useBatteryStore.getState();
 beforeEach(() => {
   __reset();
   useBatteryStore.setState(initialState, true);
-  (require('react-native-mmkv') as { __map: Map<string, string> }).__map.clear();
+  (require('react-native-mmkv') as { __map: Map<string, unknown> }).__map.clear();
   history.insertSample.mockClear();
   history.purgeOlderThan.mockClear();
 });
@@ -83,7 +85,7 @@ describe('battery store', () => {
 
     expect(useBatteryStore.getState().calibration.convention).toBe('normal');
 
-    const stored = (require('react-native-mmkv') as { __map: Map<string, string> })
+    const stored = (require('react-native-mmkv') as { __map: Map<string, unknown> })
       .__map;
     expect(stored.get('sign.Mock Device')).toBe('normal');
   });
@@ -133,7 +135,7 @@ describe('battery store', () => {
     useBatteryStore.getState().resetCalibration();
 
     expect(useBatteryStore.getState().calibration.convention).toBe('unknown');
-    const stored = (require('react-native-mmkv') as { __map: Map<string, string> })
+    const stored = (require('react-native-mmkv') as { __map: Map<string, unknown> })
       .__map;
     expect(stored.has('sign.Mock Device')).toBe(false);
   });

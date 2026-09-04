@@ -1,13 +1,25 @@
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DefaultTheme,
+  DarkTheme,
+} from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Activity, History as HistoryIconSrc, LineChart, Stethoscope } from 'lucide-react-native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import {
+  Activity,
+  History as HistoryIconSrc,
+  LineChart,
+  Settings as SettingsIconSrc,
+} from 'lucide-react-native';
 import { useTheme } from '../design-system/tamagui';
 import { DashboardScreen } from '../features/battery-live/DashboardScreen';
 import { DiagnosticsScreen } from '../features/diagnostics/DiagnosticsScreen';
 import { HistoryScreen } from '../features/history/HistoryScreen';
 import { SessionsScreen } from '../features/sessions/SessionsScreen';
+import { SettingsScreen } from '../features/settings/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
+const SettingsStack = createNativeStackNavigator();
 
 type TabIconProps = { color: string; size: number };
 
@@ -22,14 +34,36 @@ const HistoryIcon = ({ color, size }: TabIconProps) => (
 const SessionsIcon = ({ color, size }: TabIconProps) => (
   <HistoryIconSrc color={color} size={size} />
 );
-const DiagnosticsIcon = ({ color, size }: TabIconProps) => (
-  <Stethoscope color={color} size={size} />
+const SettingsIcon = ({ color, size }: TabIconProps) => (
+  <SettingsIconSrc color={color} size={size} />
 );
 
-/**
- * §42.1's four primary destinations. Diagnostics sits alongside them for now
- * rather than under Settings, because Settings does not exist yet.
- */
+/** §42.1: Diagnostics lives under Settings, reached by a native stack push. */
+function SettingsNavigator() {
+  const theme = useTheme();
+  return (
+    <SettingsStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.background?.val },
+        headerTintColor: theme.accent?.val,
+        contentStyle: { backgroundColor: theme.background?.val },
+      }}
+    >
+      <SettingsStack.Screen
+        name="SettingsHome"
+        component={SettingsScreen}
+        options={{ headerShown: false }}
+      />
+      <SettingsStack.Screen
+        name="Diagnostics"
+        component={DiagnosticsScreen}
+        options={{ title: 'Diagnostics' }}
+      />
+    </SettingsStack.Navigator>
+  );
+}
+
+/** §42.1's four primary destinations, telemetry-first. */
 export function Navigation({ dark }: { dark: boolean }) {
   const theme = useTheme();
 
@@ -62,30 +96,22 @@ export function Navigation({ dark }: { dark: boolean }) {
         <Tab.Screen
           name="Overview"
           component={DashboardScreen}
-          options={{
-            tabBarIcon: OverviewIcon,
-          }}
+          options={{ tabBarIcon: OverviewIcon }}
         />
         <Tab.Screen
           name="History"
           component={HistoryScreen}
-          options={{
-            tabBarIcon: HistoryIcon,
-          }}
+          options={{ tabBarIcon: HistoryIcon }}
         />
         <Tab.Screen
           name="Sessions"
           component={SessionsScreen}
-          options={{
-            tabBarIcon: SessionsIcon,
-          }}
+          options={{ tabBarIcon: SessionsIcon }}
         />
         <Tab.Screen
-          name="Diagnostics"
-          component={DiagnosticsScreen}
-          options={{
-            tabBarIcon: DiagnosticsIcon,
-          }}
+          name="Settings"
+          component={SettingsNavigator}
+          options={{ tabBarIcon: SettingsIcon }}
         />
       </Tab.Navigator>
     </NavigationContainer>
