@@ -13,11 +13,21 @@ import {
 import { toChargeStatus, type BatteryReading } from '../../data/models/battery';
 import {
   clearSignConvention,
+  readRetention,
   readSignConvention,
+  RETENTION_MS,
   writeSignConvention,
 } from '../../core/storage/preferences';
+import { insertSample, purgeOlderThan } from '../../data/history/historyRepository';
 
 const FOREGROUND_INTERVAL_MS = 10_000;
+
+/**
+ * Telemetry also arrives on plug/unplug broadcasts, which can burst. Persisting
+ * is throttled to the sampling interval so a flurry of state changes does not
+ * inflate the database (§19, §63).
+ */
+const MIN_PERSIST_GAP_MS = FOREGROUND_INTERVAL_MS - 500;
 
 /**
  * A device missing a metric is still `ready` -- availability is a property of
@@ -34,6 +44,8 @@ interface BatteryStore {
   diagnostics: NativeDiagnostics | null;
   calibration: SignCalibration;
   error: string | null;
+  /** Storage problems are surfaced separately: live telemetry still works. */
+  historyError: string | null;
 
   start: () => Promise<void>;
   stop: () => void;
@@ -41,6 +53,7 @@ interface BatteryStore {
 }
 
 let subscription: { remove: () => void } | null = null;
+let lastPersistedAt = 0;
 
 export const useBatteryStore = create<BatteryStore>((set, get) => ({
   status: 'loading',
@@ -50,8 +63,12 @@ export const useBatteryStore = create<BatteryStore>((set, get) => ({
   diagnostics: null,
   calibration: INITIAL_CALIBRATION,
   error: null,
+  historyError: null,
 
   start: async () => {
+    // A fresh monitoring session writes its first sample immediately rather
+    // than waiting out a throttle left over from the previous one.
+    lastPersistedAt = 0;
     try {
       const diagnostics = await BatteryTelemetry.getDiagnostics();
       const capabilities = await BatteryTelemetry.getCapabilities();
@@ -63,6 +80,7 @@ export const useBatteryStore = create<BatteryStore>((set, get) => ({
           : { convention: stored, streak: 0, suggests: stored };
 
       set({ diagnostics, capabilities, calibration });
+      applyRetention();
       applySnapshot(await BatteryTelemetry.getSnapshot(), set, get);
 
       subscription?.remove();
@@ -109,12 +127,35 @@ function applySnapshot(snapshot: NativeSnapshot, set: Setter, get: Getter) {
     if (model) writeSignConvention(model, calibration.convention);
   }
 
+  const reading = toReading(snapshot, calibration.convention);
+
+  if (snapshot.timestamp - lastPersistedAt >= MIN_PERSIST_GAP_MS) {
+    lastPersistedAt = snapshot.timestamp;
+    try {
+      insertSample(reading);
+    } catch (e) {
+      // §35: a storage failure must never take the live view down with it.
+      set({ historyError: describeError(e) });
+    }
+  }
+
   set({
     snapshot,
     calibration,
-    reading: toReading(snapshot, calibration.convention),
+    reading,
     status: 'ready',
   });
+}
+
+/** §22: purge on startup; sampling keeps the window rolling from there. */
+function applyRetention(): void {
+  const window = RETENTION_MS[readRetention()];
+  if (window === null) return;
+  try {
+    purgeOlderThan(Date.now() - window);
+  } catch {
+    // A failed purge is not worth interrupting monitoring for.
+  }
 }
 
 function describeError(e: unknown): string {
