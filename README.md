@@ -81,6 +81,8 @@ Install it:
 adb install -r android/app/build/outputs/apk/release/app-release.apk
 ```
 
+The release APK is around 48 MB for arm64-v8a alone — Skia is most of that.
+
 ### Three things to know before shipping one
 
 **1. Signing still uses the debug keystore.** This is the React Native template

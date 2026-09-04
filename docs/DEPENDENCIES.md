@@ -26,7 +26,7 @@ MediaTek MT6768, arm64-v8a only.
 | zustand | 5.0.15 | Live telemetry store. |
 | react-native-mmkv | 4.3.2 | Small preferences only (§4.0.6). |
 | react-native-nitro-modules | 0.37.1 | MMKV 4 and NitroSQLite peer. |
-| react-native-nitro-sqlite | 9.7.0 | Battery sample history (§4.0.6). |
+| @op-engineering/op-sqlite | 18.1.4 | Battery sample history (see deviation 8). |
 | @shopify/react-native-skia | 2.11.2 | Chart rendering backend. |
 | victory-native | 42.0.1 | Time-series charts (§4.0.5). |
 | react-native-gesture-handler | 2.32.0 | Chart scrubbing (see deviation 7). |
@@ -88,6 +88,37 @@ around its requirements.
 
 Revisit if the project moves to a much shorter path, or once GH flattens that
 tree.
+
+**8. `@op-engineering/op-sqlite` instead of `react-native-nitro-sqlite`.**
+nitro-sqlite builds fine in debug but **cannot produce a release build**. Its
+CMake configure step never receives the prefab package it depends on:
+
+```
+ninja explain: output .../prefab/lib/aarch64-linux-android/cmake/
+  react-native-nitro-modules/react-native-nitro-modulesConfig.cmake
+  of phony edge with no inputs doesn't exist
+ninja: error: manifest 'build.ninja' still dirty after 100 tries
+```
+
+The evidence is direct: `.cxx/Debug/*/prefab/.../react-native-nitro-modules/`
+contains the config, while `.cxx/RelWithDebInfo/*/prefab/` contains no `.cmake`
+files at all — AGP does not extract the prefab dependency for the release
+variant. Ruled out along the way: stale `.cxx` caches (cleared, no change),
+MAX_PATH (paths are well under the limit), and a missing producer (forcing
+`:react-native-nitro-modules:assembleRelease` publishes the prefab, and the
+consumer's directory stays empty regardless). `react-native-mmkv`, which also
+depends on nitro-modules, builds release without trouble.
+
+§4.0.6 only says "prefer" nitro-sqlite, while §4.2 rule 7 *requires* a working
+release build — so a package that cannot produce one does not qualify. op-sqlite
+is far more widely deployed and builds release cleanly.
+
+The swap touched three files plus two test mocks, because the database is
+confined to `historyRepository.ts` and `sessions.ts`. The schema, the
+aggregation query and the window-function sessionisation are unchanged. API
+differences: `execute` → `executeSync`, and `result.rows._array` → `result.rows`
+(a plain array), which is now cast in one place via a `selectRows` helper
+instead of at every call site.
 
 ## Native API notes
 
