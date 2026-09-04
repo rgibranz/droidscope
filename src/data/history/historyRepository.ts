@@ -1,4 +1,4 @@
-import { open, type NitroSQLiteConnection } from 'react-native-nitro-sqlite';
+import { open, type DB } from '@op-engineering/op-sqlite';
 import type { BatteryReading } from '../models/battery';
 import type { AnalyticsSample } from '../../features/analytics/estimate';
 import { bucketSizeMs } from './buckets';
@@ -11,27 +11,36 @@ import {
   type HistorySummary,
 } from './schema';
 
-let connection: NitroSQLiteConnection | null = null;
+let connection: DB | null = null;
 
-function db(): NitroSQLiteConnection {
+function db(): DB {
   if (connection) return connection;
   connection = open({ name: DATABASE_NAME });
   for (const migration of MIGRATIONS) {
-    connection.execute(migration);
+    connection.executeSync(migration);
   }
   return connection;
 }
 
 /** Test seam: lets a suite inject a fake connection. */
-export function __setConnection(fake: NitroSQLiteConnection | null): void {
+export function __setConnection(fake: DB | null): void {
   connection = fake;
+}
+
+/**
+ * op-sqlite's executeSync is not generic and returns rows as
+ * `Record<string, Scalar>`. This is the single place that cast happens; every
+ * query below then reads as typed rows.
+ */
+function selectRows<Row>(sql: string, params?: unknown[]): Row[] {
+  return db().executeSync(sql, params as never).rows as unknown as Row[];
 }
 
 export function insertSample(reading: BatteryReading): void {
   // A reading with no level at all carries nothing worth plotting.
   if (reading.levelPercent === null) return;
 
-  db().execute(
+  db().executeSync(
     `INSERT INTO samples (
        timestamp, level_percent, voltage_mv, current_ua, power_w,
        temperature_c, charge_counter_uah, is_charging, charge_status,
@@ -69,7 +78,7 @@ type BucketRow = {
  */
 export function queryHistory(from: number, to: number): HistoryPoint[] {
   const bucket = bucketSizeMs(to - from);
-  const result = db().execute<BucketRow>(
+  const result = selectRows<BucketRow>(
     `SELECT
        (timestamp / ?) * ? AS bucket_start,
        AVG(level_percent)  AS level_percent,
@@ -84,7 +93,7 @@ export function queryHistory(from: number, to: number): HistoryPoint[] {
     [bucket, bucket, from, to],
   );
 
-  return result.rows._array.map(row => ({
+  return result.map(row => ({
     timestamp: Number(row.bucket_start),
     levelPercent: nullableNumber(row.level_percent),
     powerW: nullableNumber(row.power_w),
@@ -109,7 +118,7 @@ type SummaryRow = {
  * -- or anyone who does not want to scrub a chart -- still gets them.
  */
 export function querySummary(from: number, to: number): HistorySummary {
-  const stats = db().execute<SummaryRow>(
+  const stats = selectRows<SummaryRow>(
     `SELECT
        COUNT(*)        AS count,
        MIN(timestamp)  AS from_ts,
@@ -121,15 +130,15 @@ export function querySummary(from: number, to: number): HistorySummary {
      WHERE timestamp >= ? AND timestamp <= ?`,
     [from, to],
   );
-  const row = stats.rows.item(0);
+  const row = stats[0];
 
-  const edges = db().execute<{ level_percent: number | null; timestamp: number }>(
+  const edges = selectRows<{ level_percent: number | null; timestamp: number }>(
     `SELECT level_percent, timestamp FROM samples
      WHERE timestamp >= ? AND timestamp <= ? AND level_percent IS NOT NULL
      ORDER BY timestamp ASC`,
     [from, to],
   );
-  const levels = edges.rows._array;
+  const levels = edges;
 
   return {
     count: row ? Number(row.count) : 0,
@@ -147,7 +156,7 @@ export function querySummary(from: number, to: number): HistorySummary {
 
 /** §22: old samples are purged rather than kept forever. */
 export function purgeOlderThan(cutoff: number): number {
-  const result = db().execute(`DELETE FROM samples WHERE timestamp < ?`, [
+  const result = db().executeSync(`DELETE FROM samples WHERE timestamp < ?`, [
     cutoff,
   ]);
   return result.rowsAffected ?? 0;
@@ -170,7 +179,7 @@ export function queryAnalyticsSamples(
   from: number,
   to: number,
 ): AnalyticsSample[] {
-  const result = db().execute<AnalyticsRow>(
+  const result = selectRows<AnalyticsRow>(
     `SELECT timestamp, level_percent, charge_counter_uah, power_w, is_charging
      FROM samples
      WHERE timestamp >= ? AND timestamp <= ? AND level_percent IS NOT NULL
@@ -178,7 +187,7 @@ export function queryAnalyticsSamples(
     [from, to],
   );
 
-  return result.rows._array.map(row => ({
+  return result.map(row => ({
     timestamp: Number(row.timestamp),
     levelPercent: Number(row.level_percent),
     chargeCounterMah:
@@ -202,7 +211,7 @@ type ExportQueryRow = {
 
 /** Every stored column, in chronological order, for CSV export (§32). */
 export function queryForExport(from: number, to: number): ExportRow[] {
-  const result = db().execute<ExportQueryRow>(
+  const result = selectRows<ExportQueryRow>(
     `SELECT timestamp, level_percent, voltage_mv, current_ua, power_w,
             temperature_c, charge_status
      FROM samples
@@ -211,7 +220,7 @@ export function queryForExport(from: number, to: number): ExportRow[] {
     [from, to],
   );
 
-  return result.rows._array.map(row => ({
+  return result.map(row => ({
     timestamp: Number(row.timestamp),
     levelPercent: nullableNumber(row.level_percent),
     voltageMv: nullableNumber(row.voltage_mv),
@@ -228,14 +237,14 @@ export function getSessions(since: number, limit = 100): Session[] {
 }
 
 export function countSamples(): number {
-  const result = db().execute<{ count: number }>(
+  const result = selectRows<{ count: number }>(
     `SELECT COUNT(*) AS count FROM samples`,
   );
-  return Number(result.rows.item(0)?.count ?? 0);
+  return Number(result[0]?.count ?? 0);
 }
 
 export function clearHistory(): void {
-  db().execute(`DELETE FROM samples`);
+  db().executeSync(`DELETE FROM samples`);
 }
 
 function nullableNumber(value: unknown): number | null {

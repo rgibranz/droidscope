@@ -1,4 +1,4 @@
-jest.mock('react-native-nitro-sqlite', () => ({ open: jest.fn() }));
+jest.mock('@op-engineering/op-sqlite', () => ({ open: jest.fn() }));
 
 import { querySessions, SESSION_GAP_MS, toSession } from './sessions';
 
@@ -22,16 +22,9 @@ const row = {
 function connectionReturning(rows: unknown[]) {
   const calls: Array<{ query: string; params: unknown[] }> = [];
   const connection = {
-    execute: (query: string, params: unknown[] = []) => {
+    executeSync: (query: string, params: unknown[] = []) => {
       calls.push({ query, params });
-      return {
-        rowsAffected: 0,
-        rows: {
-          _array: rows,
-          length: rows.length,
-          item: (i: number) => rows[i],
-        },
-      };
+      return { rowsAffected: 0, rows };
     },
   } as never;
   return { connection, calls };

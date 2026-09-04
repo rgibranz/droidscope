@@ -1,4 +1,4 @@
-import type { NitroSQLiteConnection } from 'react-native-nitro-sqlite';
+import type { DB } from '@op-engineering/op-sqlite';
 
 /**
  * Sessions (§27, §28) are *derived* from the samples table rather than tracked
@@ -104,16 +104,16 @@ const SESSION_QUERY = `
 `;
 
 export function querySessions(
-  db: NitroSQLiteConnection,
+  db: DB,
   since: number,
   limit = 100,
 ): Session[] {
-  const result = db.execute<SessionRow>(SESSION_QUERY, [
+  const rows = db.executeSync(SESSION_QUERY, [
     SESSION_GAP_MS,
     since,
     limit,
   ]);
-  return result.rows._array
+  return (rows.rows as unknown as SessionRow[])
     .filter(row => Number(row.sample_count) >= MIN_SESSION_SAMPLES)
     .map(toSession);
 }

@@ -1,4 +1,4 @@
-jest.mock('react-native-nitro-sqlite', () => ({ open: jest.fn() }));
+jest.mock('@op-engineering/op-sqlite', () => ({ open: jest.fn() }));
 
 import type { BatteryReading } from '../models/battery';
 import {
@@ -13,20 +13,13 @@ type Call = { query: string; params: unknown[] };
 function fakeConnection(rows: Record<string, unknown>[] = [], rowsAffected = 0) {
   const calls: Call[] = [];
   const connection = {
-    execute: (query: string, params: unknown[] = []) => {
+    executeSync: (query: string, params: unknown[] = []) => {
       calls.push({ query, params });
-      return {
-        rowsAffected,
-        rows: {
-          _array: rows,
-          length: rows.length,
-          item: (i: number) => rows[i],
-        },
-      };
+      return { rowsAffected, rows };
     },
   };
-  // The repository only ever uses `execute`; the rest of the connection surface
-  // is irrelevant to these tests.
+  // The repository only ever uses `executeSync`; the rest of the connection
+  // surface is irrelevant to these tests.
   __setConnection(connection as never);
   return calls;
 }
