@@ -120,6 +120,18 @@ differences: `execute` → `executeSync`, and `result.rows._array` → `result.r
 (a plain array), which is now cast in one place via a `selectRows` helper
 instead of at every call site.
 
+Verified on device from the **release** APK, with Metro stopped: samples
+accumulate, charts render, and the Sessions screen works — confirming op-sqlite's
+bundled SQLite supports the window functions (`LAG`, `FIRST_VALUE`,
+`SUM() OVER`) that sessionisation depends on.
+
+One consequence: history written by the old nitro-sqlite build did not carry
+over. The two libraries resolve the database path differently, so op-sqlite
+started a fresh file rather than reading the previous one. Nothing was
+corrupted; the old rows are simply orphaned. If that data mattered it would have
+needed exporting to CSV first — worth remembering before any future storage
+swap.
+
 ## Native API notes
 
 **`BATTERY_PROPERTY_CYCLE_COUNT` does not exist.** It is not in `android.jar` at
