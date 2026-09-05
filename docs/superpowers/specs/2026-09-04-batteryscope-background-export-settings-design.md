@@ -70,6 +70,30 @@ About. Diagnostics moved under Settings via a native stack push, which is where
 The notification permission is requested at the moment background monitoring is
 switched on, not at launch — the user sees why it is being asked.
 
+## 3b. Defect found later: background recording did nothing
+
+The claim in section 1 — "React Native keeps the JS runtime alive for the life
+of the process" — was only true while an Activity had already created it. Two
+gaps followed from it, and together they meant background monitoring recorded
+nothing at all:
+
+**Sampling was owned by a screen.** `useBatteryStore.start()` ran from
+`DashboardScreen`'s effect, and its cleanup called `stop()`. Nothing subscribed
+to telemetry unless the dashboard happened to be mounted — precisely the case
+background monitoring exists to cover. Monitoring now starts with the bundle
+(`core/monitoring/bootstrap.ts`, called from `index.js`), `start()` is
+idempotent, and no screen stops it.
+
+**The runtime was never created after a restart.** `reactHost` is a `by lazy`
+property that only a ReactActivity touches. When `START_STICKY` revived the
+process without an Activity, the service ticked, read the battery, and updated
+its notification from native values — while `emitFromService` found a null
+module and dropped every sample. It looked like it was working. The service now
+calls `ReactHost.start()` when `currentReactContext` is null.
+
+The second one is the worse bug: a feature that fails loudly gets fixed, one
+that keeps showing a live notification while recording nothing does not.
+
 ## 4. A defect this phase found
 
 The Settings screen showed "238 samples stored" while History showed 249. The
