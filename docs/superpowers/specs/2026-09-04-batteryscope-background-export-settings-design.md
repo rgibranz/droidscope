@@ -94,6 +94,25 @@ calls `ReactHost.start()` when `currentReactContext` is null.
 The second one is the worse bug: a feature that fails loudly gets fixed, one
 that keeps showing a live notification while recording nothing does not.
 
+### Verified on device after the fix
+
+| Time | State | Samples |
+| --- | --- | --- |
+| 11:53 | app just opened | 4 |
+| 11:56 | 2 min at the home screen | 9 |
+| 12:00 | 2.5 min **after swiping the app from recents** | 14 |
+
+One sample every ~30 seconds throughout, matching the background interval — and
+crucially still recording once the Activity was destroyed, which is the case
+that previously stopped it dead.
+
+Two related findings: `am kill` **refuses** to kill a process holding a
+foreground service, and swiping from recents does not kill it either — the pid
+was unchanged across both. So `ensureJsRuntime()` guards a path that is hard to
+reach on this device and remains **unverified**; it covers process death from
+memory pressure or an aggressive OEM killer, neither of which can be triggered
+on demand.
+
 ## 4. A defect this phase found
 
 The Settings screen showed "238 samples stored" while History showed 249. The
