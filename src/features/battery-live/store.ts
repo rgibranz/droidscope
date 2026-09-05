@@ -58,6 +58,15 @@ interface BatteryStore {
 let subscription: { remove: () => void } | null = null;
 let lastPersistedAt = 0;
 
+/**
+ * Monitoring is owned by the app process, not by a screen.
+ *
+ * It used to be started from DashboardScreen's effect and stopped when that
+ * screen unmounted, which meant nothing was recorded unless the UI happened to
+ * be mounted -- the exact case background monitoring exists to cover.
+ */
+let monitoring = false;
+
 export const useBatteryStore = create<BatteryStore>((set, get) => ({
   status: 'loading',
   reading: null,
@@ -69,6 +78,12 @@ export const useBatteryStore = create<BatteryStore>((set, get) => ({
   historyError: null,
 
   start: async () => {
+    // Idempotent: the bootstrap calls this when the bundle loads, and the
+    // dashboard calls it again on mount as a safety net. The second call must
+    // not tear down the first subscription or reset the write throttle.
+    if (monitoring) return;
+    monitoring = true;
+
     // A fresh monitoring session writes its first sample immediately rather
     // than waiting out a throttle left over from the previous one.
     lastPersistedAt = 0;
@@ -94,11 +109,17 @@ export const useBatteryStore = create<BatteryStore>((set, get) => ({
       await restoreBackgroundMonitoring();
       set({ status: 'ready', error: null });
     } catch (e) {
+      monitoring = false;
       set({ status: 'error', error: describeError(e) });
     }
   },
 
+  /**
+   * Only ever called deliberately -- never from a screen unmounting. Sampling
+   * has to outlive the UI for background monitoring to mean anything.
+   */
   stop: () => {
+    monitoring = false;
     subscription?.remove();
     subscription = null;
     BatteryTelemetry.stopMonitoring().catch(() => {});

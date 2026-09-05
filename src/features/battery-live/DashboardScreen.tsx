@@ -50,15 +50,16 @@ export function DashboardScreen() {
   const calibration = useBatteryStore(s => s.calibration);
   const error = useBatteryStore(s => s.error);
   const start = useBatteryStore(s => s.start);
-  const stop = useBatteryStore(s => s.stop);
 
   // Called before the early returns below: hooks cannot be conditional.
   const estimate = useEstimate(reading?.isCharging ?? false);
 
+  // Monitoring normally starts with the bundle (see core/monitoring/bootstrap).
+  // This is a safety net for the case where that failed; start() is idempotent.
+  // Deliberately no cleanup: sampling must outlive this screen.
   useEffect(() => {
     start();
-    return stop;
-  }, [start, stop]);
+  }, [start]);
 
   if (status === 'error') {
     return (

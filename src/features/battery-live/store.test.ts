@@ -40,6 +40,9 @@ const initialState = useBatteryStore.getState();
 
 beforeEach(() => {
   __reset();
+  // start() is idempotent, so a previous test's monitoring flag would make the
+  // next start() a no-op. stop() clears it through the public API.
+  useBatteryStore.getState().stop();
   useBatteryStore.setState(initialState, true);
   (require('react-native-mmkv') as { __map: Map<string, unknown> }).__map.clear();
   history.insertSample.mockClear();
@@ -110,6 +113,29 @@ describe('battery store', () => {
 
     // Past the sampling interval, writing resumes.
     __emit({ ...emptySnapshot, timestamp: base + 11_000 });
+    expect(history.insertSample).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not double-subscribe when start is called twice', async () => {
+    // The bundle bootstrap starts monitoring, then the dashboard calls start()
+    // again on mount. A second subscription would record every sample twice.
+    await useBatteryStore.getState().start();
+    await useBatteryStore.getState().start();
+    history.insertSample.mockClear();
+
+    __emit({ ...emptySnapshot, timestamp: emptySnapshot.timestamp + 20_000 });
+
+    expect(history.insertSample).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps recording after the UI is gone', async () => {
+    // Sampling must outlive the dashboard: unmounting a screen no longer stops
+    // monitoring, which is what made background recording silently do nothing.
+    await useBatteryStore.getState().start();
+    history.insertSample.mockClear();
+
+    __emit({ ...emptySnapshot, timestamp: emptySnapshot.timestamp + 20_000 });
+
     expect(history.insertSample).toHaveBeenCalledTimes(1);
   });
 
