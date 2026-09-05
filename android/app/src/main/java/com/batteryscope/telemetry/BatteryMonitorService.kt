@@ -14,6 +14,7 @@ import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.batteryscope.MainActivity
 import com.batteryscope.R
+import com.facebook.react.ReactApplication
 
 /**
  * §20: optional background monitoring. Android will not let an app sample on a
@@ -21,11 +22,14 @@ import com.batteryscope.R
  * notification, so the notification is not decoration -- it is the price of the
  * feature, and it shows live telemetry so it is at least useful.
  *
- * The service owns the schedule (§19.1). It does not write to the database
- * itself: React Native keeps the JS runtime alive for the life of the process,
- * and the foreground service is what keeps the process alive, so the existing
- * TypeScript persistence path keeps working. Duplicating the schema into Kotlin
- * would buy nothing and risk two writers.
+ * The service owns the schedule (§19.1) but does not write to the database
+ * itself; persistence stays in TypeScript where it is unit tested, and a second
+ * writer in Kotlin would mean duplicating the schema.
+ *
+ * That only works while a JS runtime exists, which is not automatic: after
+ * START_STICKY revives the process there is no Activity, and `reactHost` is a
+ * lazy property nothing else would touch. `ensureJsRuntime` covers that -- it is
+ * the difference between recording and merely appearing to.
  *
  * No wake locks are taken (§20): the sampling interval is minutes-scale and
  * missing a tick while the CPU sleeps is preferable to draining the battery
@@ -40,12 +44,36 @@ class BatteryMonitorService : Service() {
   private val ticker =
     object : Runnable {
       override fun run() {
+        ensureJsRuntime()
         val snapshot = provider.snapshot()
         BatteryTelemetryModule.emitFromService(snapshot)
         updateNotification()
         handler.postDelayed(this, intervalMs)
       }
     }
+
+  /**
+   * The database write happens in JavaScript, so a running service with no JS
+   * runtime samples into the void: the notification keeps updating from native
+   * values while nothing is recorded.
+   *
+   * That is the state after START_STICKY revives the process without an
+   * Activity -- `reactHost` is a lazy property that only an Activity would
+   * otherwise touch. Starting it here is what makes background recording real.
+   */
+  private fun ensureJsRuntime() {
+    try {
+      val host = (application as? ReactApplication)?.reactHost ?: return
+      if (host.currentReactContext == null) {
+        // Asynchronous; this tick's emit is likely dropped and the next one
+        // lands. Losing one sample beats losing every sample.
+        host.start()
+      }
+    } catch (t: Throwable) {
+      // A service that cannot reach JS still shows correct live values in its
+      // notification, so it must not crash here.
+    }
+  }
 
   override fun onCreate() {
     super.onCreate()
